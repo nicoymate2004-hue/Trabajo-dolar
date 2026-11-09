@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dólar Blue</title>
+<style>
+  :root {
+    --fondo: #14201b;
+    --panel: #1c2c25;
+    --linea: #34493f;
+    --texto: #eef3ea;
+    --suave: #9fb3a6;
+    --acento: #7fd48f;
+    --error: #ff9b8a;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --fondo: #eef3ea;
+      --panel: #ffffff;
+      --linea: #c9d6cb;
+      --texto: #14201b;
+      --suave: #52665a;
+      --acento: #1d7a3a;
+      --error: #b3261e;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--fondo);
+    color: var(--texto);
+    font-family: Georgia, "Times New Roman", serif;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  main { width: 100%; max-width: 420px; }
+  h1 { font-size: 1.9rem; font-weight: 600; margin: 0 0 6px; }
+  p.sub { color: var(--suave); margin: 0 0 24px; line-height: 1.5; }
+  form, .cotizacion {
+    background: var(--panel);
+    border: 1px solid var(--linea);
+    border-radius: 10px;
+    padding: 22px;
+  }
+  label { display: block; font-size: .95rem; margin-bottom: 6px; }
+  input {
+    width: 100%;
+    padding: 11px 12px;
+    margin-bottom: 16px;
+    font: inherit;
+    color: var(--texto);
+    background: transparent;
+    border: 1px solid var(--linea);
+    border-radius: 6px;
+  }
+  input:focus-visible, button:focus-visible { outline: 3px solid var(--acento); outline-offset: 2px; }
+  button {
+    font: inherit;
+    width: 100%;
+    padding: 12px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--acento);
+    color: #0d1a12;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  button:disabled { opacity: .6; cursor: wait; }
+  button.sec { background: transparent; color: var(--suave); border: 1px solid var(--linea); margin-top: 18px; font-weight: 400; }
+  .error { color: var(--error); min-height: 1.3em; margin: 0 0 12px; font-size: .95rem; }
+  .venta { font-size: 3.4rem; line-height: 1; margin: 4px 0 4px; color: var(--acento); font-variant-numeric: tabular-nums; }
+  .venta-label { color: var(--suave); margin: 0 0 20px; }
+  dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 10px 16px; border-top: 1px solid var(--linea); padding-top: 16px; }
+  dt { color: var(--suave); }
+  dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Dólar Blue</h1>
+  <p class="sub" id="sub">Ingresá tu DNI y tu Palabra Secreta para ver la cotización.</p>
+
+  <form id="login" autocomplete="off">
+    <label for="dni">DNI</label>
+    <input id="dni" inputmode="numeric" required>
+    <label for="secreto">Palabra Secreta</label>
+    <input id="secreto" type="password" required>
+    <p class="error" id="error" role="alert"></p>
+    <button type="submit" id="entrar">Ver cotización</button>
+  </form>
+
+  <section class="cotizacion" id="cotizacion" hidden>
+    <p class="venta" id="venta"></p>
+    <p class="venta-label">Precio de venta</p>
+    <dl>
+      <dt>Compra</dt><dd id="compra"></dd>
+      <dt>Promedio</dt><dd id="promedio"></dd>
+      <dt>Actualizado</dt><dd id="fecha"></dd>
+    </dl>
+    <button class="sec" id="salir" type="button">Cerrar sesión</button>
+  </section>
+</main>
+
+<script type="module">
+  import { validarSecreto } from "https://desarrollo-aplicaciones.vercel.app/2024/code/validar-secreto.js"
+  import { obtenerJson } from "https://desarrollo-aplicaciones.vercel.app/2024/code/obtener-json.js"
+
+  const $ = (id) => document.getElementById(id)
+  const pesos = (n) => n.toLocaleString("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 2 })
+
+  async function mostrarCotizacion() {
+    const d = await obtenerJson("https://dolarapi.com/v1/dolares/blue")
+    $("venta").textContent = pesos(d.venta)
+    $("compra").textContent = pesos(d.compra)
+    $("promedio").textContent = pesos((d.compra + d.venta) / 2)
+    $("fecha").textContent = new Date(d.fechaActualizacion).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })
+  }
+
+  $("login").addEventListener("submit", async (e) => {
+    e.preventDefault()
+    const boton = $("entrar")
+    $("error").textContent = ""
+    boton.disabled = true
+    boton.textContent = "Cargando..."
+    try {
+      const ok = await validarSecreto($("dni").value.trim(), $("secreto").value)
+      if (!ok) {
+        $("error").textContent = "La Palabra Secreta es incorrecta."
+        return
+      }
+      await mostrarCotizacion()
+      $("login").hidden = true
+      $("sub").hidden = true
+      $("cotizacion").hidden = false
+    } catch (err) {
+      $("error").textContent = "No pudimos completar la consulta. Probá de nuevo."
+    } finally {
+      boton.disabled = false
+      boton.textContent = "Ver cotización"
+    }
+  })
+
+  $("salir").addEventListener("click", () => {
+    $("secreto").value = ""
+    $("cotizacion").hidden = true
+    $("login").hidden = false
+    $("sub").hidden = false
+  })
+</script>
+</body>
+</html>
